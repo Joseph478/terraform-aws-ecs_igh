@@ -61,7 +61,7 @@ resource "aws_ecs_task_definition" "task_definition" {
     family = var.name_tasks_ecs
     requires_compatibilities = ["EC2"]
 
-    container_definitions = templatefile("${path.module}/../global/container_definition.json",{
+    container_definitions = templatefile(var.container_path,{
         NAME_MAIN               = var.name_main
         REPOSITORY_URL          = aws_ecr_repository.ecr_repository.repository_url
         CLOUDWATCH_LOG_GROUP    = aws_cloudwatch_log_group.ecs_tasks.name

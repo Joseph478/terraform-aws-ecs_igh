@@ -47,3 +47,6 @@ variable "region" {
     description = "Name of region"
     type        = string
 }
+variable "container_path" {
+    type = string
+}
