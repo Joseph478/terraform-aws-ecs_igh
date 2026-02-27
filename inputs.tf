@@ -3,50 +3,76 @@ variable "name_main" {
     type        = string
 }
 variable "name_cluster_ecs" {
-    description = "Name of the ECS"
+    description = "Name of the ECS cluster"
     type        = string
 }
 variable "name_ecr" {
-    description = "Name of the ECR"
+    description = "Name of the ECR repository"
     type        = string
 }
 variable "name_service_ecs" {
-    description = "Name of the service ECS"
+    description = "Name of the ECS service"
     type        = string
 }
 variable "name_tasks_ecs" {
-    description = "Name of tasks"
+    description = "Name of the task definition"
     type        = string
 }
 variable "vpc_id" {
-    description = "Name of the load balancer"
+    description = "VPC id"
     type        = string
 }
 variable "target_group_arn" {
-    description = "Target Group Arn"
+    description = "Target Group ARN from the load balancer"
     type        = string
 }
 variable "account_id" {
-    description = "Account id"
-    type = string
+    description = "AWS account id"
+    type        = string
 }
 variable "subnets" {
-    description = "Subnets of VPC"
-    type = list(string)
+    description = "Subnets for ECS tasks/instances"
+    type        = list(string)
 }
 variable "elb_name" {
-    description = "Load Balancer Name"
-    type = string
+    description = "Load Balancer name"
+    type        = string
 }
 variable "ec2_security_group_id" {
-    description = "ID Security Group ALB"
-    type = string
+    description = "Security group ID for EC2 instances or Fargate tasks"
+    type        = string
 }
 variable "region" {
-    default = "us-east-1"
-    description = "Name of region"
+    default     = "us-east-1"
+    description = "AWS region"
     type        = string
 }
 variable "container_path" {
-    type = string
+    description = "Path to the container definition JSON template"
+    type        = string
+}
+variable "launch_type" {
+    default     = "EC2"
+    description = "ECS launch type. Allowed values: 'EC2', 'FARGATE'"
+    type        = string
+
+    validation {
+        condition     = contains(["EC2", "FARGATE"], var.launch_type)
+        error_message = "launch_type must be 'EC2' or 'FARGATE'."
+    }
+}
+variable "task_cpu" {
+    default     = "512"
+    description = "CPU units for the task definition. Required for Fargate. Valid Fargate values: 256, 512, 1024, 2048, 4096"
+    type        = string
+}
+variable "task_memory" {
+    default     = "1024"
+    description = "Memory (MB) for the task definition. Required for Fargate. Must be a valid combination with task_cpu"
+    type        = string
+}
+variable "assign_public_ip" {
+    default     = false
+    description = "Assign public IP to Fargate tasks. Set to true if tasks run in public subnets without NAT gateway"
+    type        = bool
 }
