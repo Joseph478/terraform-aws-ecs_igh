@@ -76,3 +76,21 @@ variable "assign_public_ip" {
     description = "Assign public IP to Fargate tasks. Set to true if tasks run in public subnets without NAT gateway"
     type        = bool
 }
+
+variable "secrets" {
+    default     = []
+    description = "List of SSM Parameter Store or Secrets Manager secrets to inject into the container. Each item must have {name, valueFrom}"
+    type = list(object({
+        name      = string
+        valueFrom = string
+    }))
+}
+
+variable "environment_vars" {
+    default     = []
+    description = "List of plain text environment variables to inject into the container. Each item must have {name, value}"
+    type = list(object({
+        name  = string
+        value = string
+    }))
+}

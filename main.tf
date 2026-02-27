@@ -48,6 +48,8 @@ resource "aws_ecs_task_definition" "task_definition" {
         REPOSITORY_URL        = aws_ecr_repository.ecr_repository.repository_url
         CLOUDWATCH_LOG_GROUP  = aws_cloudwatch_log_group.ecs_tasks.name
         AWSLOGS_STREAM_PREFIX = "ecs"
+        SECRETS               = jsonencode(var.secrets)
+        ENVIRONMENT_VARS      = jsonencode(var.environment_vars)
     })
 }
 
