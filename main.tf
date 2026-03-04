@@ -30,6 +30,39 @@ resource "aws_cloudwatch_log_group" "ecs_tasks" {
     name = "/ecs/tasks-logs${var.name_main}"
 }
 
+# Task Role — permisos que usa el contenedor en tiempo de ejecución (ECS Exec, SSM, etc.)
+resource "aws_iam_role" "ecs_task_role" {
+    name = "ecsTaskRole-${var.name_main}"
+
+    assume_role_policy = jsonencode({
+        Version = "2012-10-17"
+        Statement = [{
+            Effect    = "Allow"
+            Principal = { Service = "ecs-tasks.amazonaws.com" }
+            Action    = "sts:AssumeRole"
+        }]
+    })
+}
+
+resource "aws_iam_role_policy" "ecs_exec_policy" {
+    name = "ecs-exec-ssm-${var.name_main}"
+    role = aws_iam_role.ecs_task_role.id
+
+    policy = jsonencode({
+        Version = "2012-10-17"
+        Statement = [{
+            Effect = "Allow"
+            Action = [
+                "ssmmessages:CreateControlChannel",
+                "ssmmessages:CreateDataChannel",
+                "ssmmessages:OpenControlChannel",
+                "ssmmessages:OpenDataChannel"
+            ]
+            Resource = "*"
+        }]
+    })
+}
+
 resource "aws_ecs_task_definition" "task_definition" {
     family = var.name_tasks_ecs
 
@@ -41,6 +74,7 @@ resource "aws_ecs_task_definition" "task_definition" {
     memory = local.is_fargate ? var.task_memory : null
 
     execution_role_arn = "arn:aws:iam::${var.account_id}:role/ecsTaskExecutionRole"
+    task_role_arn      = aws_iam_role.ecs_task_role.arn
     network_mode       = "awsvpc"
 
     container_definitions = templatefile(var.container_path, {
@@ -57,10 +91,11 @@ resource "aws_ecs_service" "ecs_service" {
     name            = "service_${var.name_main}"
     cluster         = aws_ecs_cluster.ecs_cluster.id
     task_definition = aws_ecs_task_definition.task_definition.arn
-    desired_count   = 1
-    launch_type     = var.launch_type
+    desired_count           = 2
+    launch_type             = var.launch_type
+    enable_execute_command  = true
 
-    health_check_grace_period_seconds  = 0
+    health_check_grace_period_seconds  = 60
     deployment_minimum_healthy_percent = 100
     deployment_maximum_percent         = 200
 
