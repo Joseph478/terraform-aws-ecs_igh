@@ -94,3 +94,39 @@ variable "environment_vars" {
         value = string
     }))
 }
+
+variable "health_check_grace_period_seconds" {
+    default     = 60
+    description = "Seconds to ignore failing load balancer health checks on newly instantiated tasks"
+    type        = number
+}
+
+variable "desired_count" {
+    default     = 2
+    description = "Initial number of ECS tasks to run"
+    type        = number
+}
+
+variable "min_capacity" {
+    default     = 2
+    description = "Minimum number of ECS tasks for autoscaling"
+    type        = number
+}
+
+variable "max_capacity" {
+    default     = 10
+    description = "Maximum number of ECS tasks for autoscaling"
+    type        = number
+}
+
+variable "autoscaling_cpu_target" {
+    default     = 50.0
+    description = "Target CPU utilization percentage for autoscaling (Target Tracking)"
+    type        = number
+}
+
+variable "autoscaling_memory_target" {
+    default     = 70.0
+    description = "Target Memory utilization percentage for autoscaling (Target Tracking)"
+    type        = number
+}

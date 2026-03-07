@@ -84,6 +84,8 @@ resource "aws_ecs_task_definition" "task_definition" {
         AWSLOGS_STREAM_PREFIX = "ecs"
         SECRETS               = jsonencode(var.secrets)
         ENVIRONMENT_VARS      = jsonencode(var.environment_vars)
+        TASK_CPU              = var.task_cpu
+        TASK_MEMORY           = var.task_memory
     })
 }
 
@@ -91,11 +93,11 @@ resource "aws_ecs_service" "ecs_service" {
     name            = "service_${var.name_main}"
     cluster         = aws_ecs_cluster.ecs_cluster.id
     task_definition = aws_ecs_task_definition.task_definition.arn
-    desired_count           = 2
+    desired_count           = var.desired_count
     launch_type             = var.launch_type
     enable_execute_command  = true
 
-    health_check_grace_period_seconds  = 60
+    health_check_grace_period_seconds  = var.health_check_grace_period_seconds
     deployment_minimum_healthy_percent = 100
     deployment_maximum_percent         = 200
 
@@ -132,125 +134,45 @@ resource "aws_ecs_service" "ecs_service" {
 # ─── Application Auto Scaling (funciona igual para EC2 y Fargate) ─────────────
 
 resource "aws_appautoscaling_target" "ecs_target" {
-    max_capacity       = 10
-    min_capacity       = 1
+    max_capacity       = var.max_capacity
+    min_capacity       = var.min_capacity
     resource_id        = "service/${aws_ecs_cluster.ecs_cluster.name}/${aws_ecs_service.ecs_service.name}"
     scalable_dimension = "ecs:service:DesiredCount"
     service_namespace  = "ecs"
 }
 
-resource "aws_appautoscaling_policy" "scale_up" {
-    name               = "ecs-scale-up-${var.name_main}"
-    policy_type        = "StepScaling"
+resource "aws_appautoscaling_policy" "cpu_tracking" {
+    name               = "ecs-cpu-tracking-${var.name_main}"
+    policy_type        = "TargetTrackingScaling"
     resource_id        = aws_appautoscaling_target.ecs_target.resource_id
     scalable_dimension = aws_appautoscaling_target.ecs_target.scalable_dimension
     service_namespace  = aws_appautoscaling_target.ecs_target.service_namespace
 
-    step_scaling_policy_configuration {
-        adjustment_type         = "ChangeInCapacity"
-        cooldown                = 30
-        metric_aggregation_type = "Maximum"
+    target_tracking_scaling_policy_configuration {
+        target_value       = var.autoscaling_cpu_target
+        scale_in_cooldown  = 300
+        scale_out_cooldown = 60
 
-        step_adjustment {
-            metric_interval_upper_bound = 0
-            scaling_adjustment          = 1
+        predefined_metric_specification {
+            predefined_metric_type = "ECSServiceAverageCPUUtilization"
         }
     }
 }
 
-resource "aws_appautoscaling_policy" "scale_down" {
-    name               = "ecs-scale-down-${var.name_main}"
-    policy_type        = "StepScaling"
+resource "aws_appautoscaling_policy" "memory_tracking" {
+    name               = "ecs-memory-tracking-${var.name_main}"
+    policy_type        = "TargetTrackingScaling"
     resource_id        = aws_appautoscaling_target.ecs_target.resource_id
     scalable_dimension = aws_appautoscaling_target.ecs_target.scalable_dimension
     service_namespace  = aws_appautoscaling_target.ecs_target.service_namespace
 
-    step_scaling_policy_configuration {
-        adjustment_type         = "ChangeInCapacity"
-        cooldown                = 60
-        metric_aggregation_type = "Maximum"
+    target_tracking_scaling_policy_configuration {
+        target_value       = var.autoscaling_memory_target
+        scale_in_cooldown  = 300
+        scale_out_cooldown = 60
 
-        step_adjustment {
-            metric_interval_upper_bound = 0
-            scaling_adjustment          = -1
+        predefined_metric_specification {
+            predefined_metric_type = "ECSServiceAverageMemoryUtilization"
         }
     }
-}
-
-# ─── CloudWatch Alarms ECS (funcionan igual para EC2 y Fargate) ───────────────
-
-resource "aws_cloudwatch_metric_alarm" "cpu_high" {
-    alarm_name          = "ecs-cpu-high-${var.name_main}"
-    comparison_operator = "GreaterThanOrEqualToThreshold"
-    evaluation_periods  = 1
-    metric_name         = "CPUUtilization"
-    namespace           = "AWS/ECS"
-    period              = 60
-    statistic           = "Average"
-    unit                = "Percent"
-    threshold           = 75
-
-    dimensions = {
-        ClusterName = aws_ecs_cluster.ecs_cluster.name
-        ServiceName = aws_ecs_service.ecs_service.name
-    }
-
-    alarm_actions = [aws_appautoscaling_policy.scale_up.arn]
-}
-
-resource "aws_cloudwatch_metric_alarm" "cpu_low" {
-    alarm_name          = "ecs-cpu-low-${var.name_main}"
-    comparison_operator = "LessThanOrEqualToThreshold"
-    evaluation_periods  = 2
-    metric_name         = "CPUUtilization"
-    namespace           = "AWS/ECS"
-    period              = 240
-    statistic           = "Average"
-    unit                = "Percent"
-    threshold           = 10
-
-    dimensions = {
-        ClusterName = aws_ecs_cluster.ecs_cluster.name
-        ServiceName = aws_ecs_service.ecs_service.name
-    }
-
-    alarm_actions = [aws_appautoscaling_policy.scale_down.arn]
-}
-
-resource "aws_cloudwatch_metric_alarm" "memory_high" {
-    alarm_name          = "ecs-memory-high-${var.name_main}"
-    comparison_operator = "GreaterThanOrEqualToThreshold"
-    evaluation_periods  = 1
-    metric_name         = "MemoryUtilization"
-    namespace           = "AWS/ECS"
-    period              = 60
-    statistic           = "Average"
-    unit                = "Percent"
-    threshold           = 75
-
-    dimensions = {
-        ClusterName = aws_ecs_cluster.ecs_cluster.name
-        ServiceName = aws_ecs_service.ecs_service.name
-    }
-
-    alarm_actions = [aws_appautoscaling_policy.scale_up.arn]
-}
-
-resource "aws_cloudwatch_metric_alarm" "memory_low" {
-    alarm_name          = "ecs-memory-low-${var.name_main}"
-    comparison_operator = "LessThanOrEqualToThreshold"
-    evaluation_periods  = 2
-    metric_name         = "MemoryUtilization"
-    namespace           = "AWS/ECS"
-    period              = 240
-    statistic           = "Average"
-    unit                = "Percent"
-    threshold           = 10
-
-    dimensions = {
-        ClusterName = aws_ecs_cluster.ecs_cluster.name
-        ServiceName = aws_ecs_service.ecs_service.name
-    }
-
-    alarm_actions = [aws_appautoscaling_policy.scale_down.arn]
 }
