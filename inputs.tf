@@ -130,3 +130,14 @@ variable "autoscaling_memory_target" {
     description = "Target Memory utilization percentage for autoscaling (Target Tracking)"
     type        = number
 }
+
+variable "type_project" {
+    default     = "laravel"
+    description = "Project type. Allowed values: 'laravel' (port 80), 'django' (port 8000)"
+    type        = string
+
+    validation {
+        condition     = contains(["laravel", "django"], var.type_project)
+        error_message = "type_project must be 'laravel' or 'django'."
+    }
+}

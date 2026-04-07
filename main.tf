@@ -1,5 +1,6 @@
 locals {
     is_fargate = var.launch_type == "FARGATE"
+    app_port   = var.type_project == "django" ? 8000 : 80
 }
 
 resource "aws_ecr_repository" "ecr_repository" {
@@ -123,7 +124,7 @@ resource "aws_ecs_service" "ecs_service" {
     load_balancer {
         target_group_arn = var.target_group_arn
         container_name   = "container_${var.name_main}"
-        container_port   = 80
+        container_port   = local.app_port
     }
 
     lifecycle {
