@@ -131,6 +131,17 @@ variable "autoscaling_memory_target" {
     type        = number
 }
 
+variable "container_insights" {
+    default     = "enhanced"
+    description = "Container Insights level for the ECS cluster. Allowed values: 'disabled', 'enabled' (cluster/service metrics), 'enhanced' (cluster/service/task/container metrics)"
+    type        = string
+
+    validation {
+        condition     = contains(["disabled", "enabled", "enhanced"], var.container_insights)
+        error_message = "container_insights must be 'disabled', 'enabled', or 'enhanced'."
+    }
+}
+
 variable "type_project" {
     default     = "laravel"
     description = "Project type. Allowed values: 'laravel' (port 80), 'django' (port 8000)"
