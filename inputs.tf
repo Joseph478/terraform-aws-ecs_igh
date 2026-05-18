@@ -152,3 +152,9 @@ variable "type_project" {
         error_message = "type_project must be 'laravel' or 'django'."
     }
 }
+
+variable "tags" {
+    description = "A map of tags to assign to all resources"
+    type        = map(string)
+    default     = {}
+}

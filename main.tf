@@ -11,6 +11,8 @@ resource "aws_ecr_repository" "ecr_repository" {
     image_scanning_configuration {
         scan_on_push = true
     }
+
+    tags = var.tags
 }
 
 resource "aws_ecs_cluster" "ecs_cluster" {
@@ -21,14 +23,16 @@ resource "aws_ecs_cluster" "ecs_cluster" {
         value = var.container_insights
     }
 
-    tags = {
+    tags = merge(var.tags, {
         ENV     = "PROD"
         SERVICE = upper(var.name_main)
-    }
+    })
 }
 
 resource "aws_cloudwatch_log_group" "ecs_tasks" {
     name = "/ecs/tasks-logs${var.name_main}"
+
+    tags = var.tags
 }
 
 # Task Role — permisos que usa el contenedor en tiempo de ejecución (ECS Exec, SSM, etc.)
@@ -43,6 +47,8 @@ resource "aws_iam_role" "ecs_task_role" {
             Action    = "sts:AssumeRole"
         }]
     })
+
+    tags = var.tags
 }
 
 resource "aws_iam_role_policy" "ecs_exec_policy" {
@@ -88,6 +94,8 @@ resource "aws_ecs_task_definition" "task_definition" {
         TASK_CPU              = var.task_cpu
         TASK_MEMORY           = var.task_memory
     })
+
+    tags = var.tags
 }
 
 resource "aws_ecs_service" "ecs_service" {
@@ -130,6 +138,8 @@ resource "aws_ecs_service" "ecs_service" {
     lifecycle {
         ignore_changes = [desired_count]
     }
+
+    tags = var.tags
 }
 
 # ─── Application Auto Scaling (funciona igual para EC2 y Fargate) ─────────────
@@ -140,6 +150,8 @@ resource "aws_appautoscaling_target" "ecs_target" {
     resource_id        = "service/${aws_ecs_cluster.ecs_cluster.name}/${aws_ecs_service.ecs_service.name}"
     scalable_dimension = "ecs:service:DesiredCount"
     service_namespace  = "ecs"
+
+    tags = var.tags
 }
 
 resource "aws_appautoscaling_policy" "cpu_tracking" {
