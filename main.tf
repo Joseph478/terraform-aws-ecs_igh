@@ -163,11 +163,11 @@ resource "aws_appautoscaling_policy" "scale_up" {
 
     step_scaling_policy_configuration {
         adjustment_type         = "ChangeInCapacity"
-        cooldown                = 30
-        metric_aggregation_type = "Maximum"
+        cooldown                = var.autoscaling_scale_up_cooldown
+        metric_aggregation_type = "Average"
 
         step_adjustment {
-            metric_interval_upper_bound = 0
+            metric_interval_lower_bound = 0
             scaling_adjustment          = 1
         }
     }
@@ -182,8 +182,8 @@ resource "aws_appautoscaling_policy" "scale_down" {
 
     step_scaling_policy_configuration {
         adjustment_type         = "ChangeInCapacity"
-        cooldown                = 60
-        metric_aggregation_type = "Maximum"
+        cooldown                = var.autoscaling_scale_down_cooldown
+        metric_aggregation_type = "Average"
 
         step_adjustment {
             metric_interval_upper_bound = 0
@@ -194,78 +194,104 @@ resource "aws_appautoscaling_policy" "scale_down" {
 
 # ─── CloudWatch Alarms ECS (funcionan igual para EC2 y Fargate) ───────────────
 
-resource "aws_cloudwatch_metric_alarm" "cpu_high" {
-    alarm_name          = "ecs-cpu-high-${var.name_main}"
+# Una sola alarma para scale_up: MAX(cpu/cpu_threshold, mem/mem_threshold) >= 1.0
+# Equivale a "CPU >= cpu_threshold OR memoria >= mem_threshold".
+# Normalizar permite umbrales distintos sin múltiples alarmas en la misma política.
+resource "aws_cloudwatch_metric_alarm" "scale_up" {
+    alarm_name          = "ecs-scale-up-${var.name_main}"
     comparison_operator = "GreaterThanOrEqualToThreshold"
     evaluation_periods  = 1
-    metric_name         = "CPUUtilization"
-    namespace           = "AWS/ECS"
-    period              = 60
-    statistic           = "Average"
-    unit                = "Percent"
-    threshold           = var.autoscaling_cpu_scale_up_threshold
+    threshold           = 1.0
 
-    dimensions = {
-        ClusterName = aws_ecs_cluster.ecs_cluster.name
-        ServiceName = aws_ecs_service.ecs_service.name
+    metric_query {
+        id          = "cpu"
+        return_data = false
+        metric {
+            metric_name = "CPUUtilization"
+            namespace   = "AWS/ECS"
+            period      = 60
+            stat        = "Average"
+            dimensions = {
+                ClusterName = aws_ecs_cluster.ecs_cluster.name
+                ServiceName = aws_ecs_service.ecs_service.name
+            }
+        }
+    }
+
+    metric_query {
+        id          = "mem"
+        return_data = false
+        metric {
+            metric_name = "MemoryUtilization"
+            namespace   = "AWS/ECS"
+            period      = 60
+            stat        = "Average"
+            dimensions = {
+                ClusterName = aws_ecs_cluster.ecs_cluster.name
+                ServiceName = aws_ecs_service.ecs_service.name
+            }
+        }
+    }
+
+    metric_query {
+        id          = "combined"
+        expression  = "MAX([cpu/${var.autoscaling_cpu_scale_up_threshold}, mem/${var.autoscaling_memory_scale_up_threshold}])"
+        label       = "Normalized Max CPU or Memory"
+        return_data = true
     }
 
     alarm_actions = [aws_appautoscaling_policy.scale_up.arn]
+
+    tags = var.tags
 }
 
-resource "aws_cloudwatch_metric_alarm" "cpu_low" {
-    alarm_name          = "ecs-cpu-low-${var.name_main}"
+# Una sola alarma para scale_down: MAX(cpu, mem) <= umbral
+# Equivale a "CPU baja Y memoria baja" sin necesitar composite alarm.
+# Evita el warning de múltiples alarmas en la misma política.
+resource "aws_cloudwatch_metric_alarm" "scale_down" {
+    alarm_name          = "ecs-scale-down-${var.name_main}"
     comparison_operator = "LessThanOrEqualToThreshold"
     evaluation_periods  = 2
-    metric_name         = "CPUUtilization"
-    namespace           = "AWS/ECS"
-    period              = 240
-    statistic           = "Average"
-    unit                = "Percent"
-    threshold           = var.autoscaling_cpu_scale_down_threshold
+    threshold           = var.autoscaling_scale_down_threshold
 
-    dimensions = {
-        ClusterName = aws_ecs_cluster.ecs_cluster.name
-        ServiceName = aws_ecs_service.ecs_service.name
+    metric_query {
+        id          = "cpu"
+        return_data = false
+        metric {
+            metric_name = "CPUUtilization"
+            namespace   = "AWS/ECS"
+            period      = var.autoscaling_scale_down_period
+            stat        = "Average"
+            dimensions = {
+                ClusterName = aws_ecs_cluster.ecs_cluster.name
+                ServiceName = aws_ecs_service.ecs_service.name
+            }
+        }
+    }
+
+    metric_query {
+        id          = "mem"
+        return_data = false
+        metric {
+            metric_name = "MemoryUtilization"
+            namespace   = "AWS/ECS"
+            period      = var.autoscaling_scale_down_period
+            stat        = "Average"
+            dimensions = {
+                ClusterName = aws_ecs_cluster.ecs_cluster.name
+                ServiceName = aws_ecs_service.ecs_service.name
+            }
+        }
+    }
+
+    metric_query {
+        id          = "combined"
+        expression  = "MAX([cpu, mem])"
+        label       = "Max CPU or Memory"
+        return_data = true
     }
 
     alarm_actions = [aws_appautoscaling_policy.scale_down.arn]
-}
 
-resource "aws_cloudwatch_metric_alarm" "memory_high" {
-    alarm_name          = "ecs-memory-high-${var.name_main}"
-    comparison_operator = "GreaterThanOrEqualToThreshold"
-    evaluation_periods  = 1
-    metric_name         = "MemoryUtilization"
-    namespace           = "AWS/ECS"
-    period              = 60
-    statistic           = "Average"
-    unit                = "Percent"
-    threshold           = var.autoscaling_memory_scale_up_threshold
-
-    dimensions = {
-        ClusterName = aws_ecs_cluster.ecs_cluster.name
-        ServiceName = aws_ecs_service.ecs_service.name
-    }
-
-    alarm_actions = [aws_appautoscaling_policy.scale_up.arn]
-}
-
-resource "aws_cloudwatch_metric_alarm" "memory_low" {
-    alarm_name          = "ecs-memory-low-${var.name_main}"
-    comparison_operator = "LessThanOrEqualToThreshold"
-    evaluation_periods  = 2
-    metric_name         = "MemoryUtilization"
-    namespace           = "AWS/ECS"
-    period              = 240
-    statistic           = "Average"
-    unit                = "Percent"
-    threshold           = var.autoscaling_memory_scale_down_threshold
-
-    dimensions = {
-        ClusterName = aws_ecs_cluster.ecs_cluster.name
-        ServiceName = aws_ecs_service.ecs_service.name
-    }
-
-    alarm_actions = [aws_appautoscaling_policy.scale_down.arn]
+    tags = var.tags
 }

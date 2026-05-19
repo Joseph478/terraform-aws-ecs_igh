@@ -143,15 +143,27 @@ variable "autoscaling_memory_scale_up_threshold" {
     type        = number
 }
 
-variable "autoscaling_cpu_scale_down_threshold" {
+variable "autoscaling_scale_down_threshold" {
     default     = 10
-    description = "CPU utilization percentage that triggers scale down"
+    description = "Utilization percentage below which both CPU and memory must fall to trigger scale down"
     type        = number
 }
 
-variable "autoscaling_memory_scale_down_threshold" {
-    default     = 10
-    description = "Memory utilization percentage that triggers scale down"
+variable "autoscaling_scale_up_cooldown" {
+    default     = 120
+    description = "Seconds to wait after a scale up before another scale up can trigger. ECS needs time to launch, register, and health-check new tasks"
+    type        = number
+}
+
+variable "autoscaling_scale_down_cooldown" {
+    default     = 300
+    description = "Seconds to wait after a scale down before another scale down can trigger"
+    type        = number
+}
+
+variable "autoscaling_scale_down_period" {
+    default     = 120
+    description = "CloudWatch evaluation period in seconds for the scale down alarm. Combined with evaluation_periods=2 gives 4 minutes before scaling down"
     type        = number
 }
 
