@@ -96,8 +96,20 @@ variable "environment_vars" {
 }
 
 variable "health_check_grace_period_seconds" {
-    default     = 60
+    default     = 120
     description = "Seconds to ignore failing load balancer health checks on newly instantiated tasks"
+    type        = number
+}
+
+variable "deployment_minimum_healthy_percent" {
+    default     = 100
+    description = "Minimum percentage of tasks that must remain healthy during a deployment"
+    type        = number
+}
+
+variable "deployment_maximum_percent" {
+    default     = 200
+    description = "Maximum percentage of tasks allowed to run during a deployment"
     type        = number
 }
 
@@ -119,15 +131,27 @@ variable "max_capacity" {
     type        = number
 }
 
-variable "autoscaling_cpu_target" {
-    default     = 50.0
-    description = "Target CPU utilization percentage for autoscaling (Target Tracking)"
+variable "autoscaling_cpu_scale_up_threshold" {
+    default     = 50
+    description = "CPU utilization percentage that triggers scale up"
     type        = number
 }
 
-variable "autoscaling_memory_target" {
-    default     = 70.0
-    description = "Target Memory utilization percentage for autoscaling (Target Tracking)"
+variable "autoscaling_memory_scale_up_threshold" {
+    default     = 70
+    description = "Memory utilization percentage that triggers scale up"
+    type        = number
+}
+
+variable "autoscaling_cpu_scale_down_threshold" {
+    default     = 10
+    description = "CPU utilization percentage that triggers scale down"
+    type        = number
+}
+
+variable "autoscaling_memory_scale_down_threshold" {
+    default     = 10
+    description = "Memory utilization percentage that triggers scale down"
     type        = number
 }
 

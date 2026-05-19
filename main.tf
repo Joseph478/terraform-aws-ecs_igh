@@ -107,8 +107,8 @@ resource "aws_ecs_service" "ecs_service" {
     enable_execute_command  = true
 
     health_check_grace_period_seconds  = var.health_check_grace_period_seconds
-    deployment_minimum_healthy_percent = 100
-    deployment_maximum_percent         = 200
+    deployment_minimum_healthy_percent = var.deployment_minimum_healthy_percent
+    deployment_maximum_percent         = var.deployment_maximum_percent
 
     # Las placement strategies solo son compatibles con EC2, no con Fargate
     dynamic "ordered_placement_strategy" {
@@ -154,38 +154,126 @@ resource "aws_appautoscaling_target" "ecs_target" {
     tags = var.tags
 }
 
-resource "aws_appautoscaling_policy" "cpu_tracking" {
-    name               = "ecs-cpu-tracking-${var.name_main}"
-    policy_type        = "TargetTrackingScaling"
+resource "aws_appautoscaling_policy" "scale_up" {
+    name               = "ecs-scale-up-${var.name_main}"
+    policy_type        = "StepScaling"
     resource_id        = aws_appautoscaling_target.ecs_target.resource_id
     scalable_dimension = aws_appautoscaling_target.ecs_target.scalable_dimension
     service_namespace  = aws_appautoscaling_target.ecs_target.service_namespace
 
-    target_tracking_scaling_policy_configuration {
-        target_value       = var.autoscaling_cpu_target
-        scale_in_cooldown  = 300
-        scale_out_cooldown = 60
+    step_scaling_policy_configuration {
+        adjustment_type         = "ChangeInCapacity"
+        cooldown                = 30
+        metric_aggregation_type = "Maximum"
 
-        predefined_metric_specification {
-            predefined_metric_type = "ECSServiceAverageCPUUtilization"
+        step_adjustment {
+            metric_interval_upper_bound = 0
+            scaling_adjustment          = 1
         }
     }
 }
 
-resource "aws_appautoscaling_policy" "memory_tracking" {
-    name               = "ecs-memory-tracking-${var.name_main}"
-    policy_type        = "TargetTrackingScaling"
+resource "aws_appautoscaling_policy" "scale_down" {
+    name               = "ecs-scale-down-${var.name_main}"
+    policy_type        = "StepScaling"
     resource_id        = aws_appautoscaling_target.ecs_target.resource_id
     scalable_dimension = aws_appautoscaling_target.ecs_target.scalable_dimension
     service_namespace  = aws_appautoscaling_target.ecs_target.service_namespace
 
-    target_tracking_scaling_policy_configuration {
-        target_value       = var.autoscaling_memory_target
-        scale_in_cooldown  = 300
-        scale_out_cooldown = 60
+    step_scaling_policy_configuration {
+        adjustment_type         = "ChangeInCapacity"
+        cooldown                = 60
+        metric_aggregation_type = "Maximum"
 
-        predefined_metric_specification {
-            predefined_metric_type = "ECSServiceAverageMemoryUtilization"
+        step_adjustment {
+            metric_interval_upper_bound = 0
+            scaling_adjustment          = -1
         }
     }
+}
+
+# ─── CloudWatch Alarms ECS (funcionan igual para EC2 y Fargate) ───────────────
+
+resource "aws_cloudwatch_metric_alarm" "cpu_high" {
+    alarm_name          = "ecs-cpu-high-${var.name_main}"
+    comparison_operator = "GreaterThanOrEqualToThreshold"
+    evaluation_periods  = 1
+    metric_name         = "CPUUtilization"
+    namespace           = "AWS/ECS"
+    period              = 60
+    statistic           = "Average"
+    unit                = "Percent"
+    threshold           = var.autoscaling_cpu_scale_up_threshold
+
+    dimensions = {
+        ClusterName = aws_ecs_cluster.ecs_cluster.name
+        ServiceName = aws_ecs_service.ecs_service.name
+    }
+
+    alarm_actions = [aws_appautoscaling_policy.scale_up.arn]
+}
+
+resource "aws_cloudwatch_metric_alarm" "cpu_low" {
+    alarm_name          = "ecs-cpu-low-${var.name_main}"
+    comparison_operator = "LessThanOrEqualToThreshold"
+    evaluation_periods  = 2
+    metric_name         = "CPUUtilization"
+    namespace           = "AWS/ECS"
+    period              = 240
+    statistic           = "Average"
+    unit                = "Percent"
+    threshold           = var.autoscaling_cpu_scale_down_threshold
+
+    dimensions = {
+        ClusterName = aws_ecs_cluster.ecs_cluster.name
+        ServiceName = aws_ecs_service.ecs_service.name
+    }
+}
+
+resource "aws_cloudwatch_metric_alarm" "memory_high" {
+    alarm_name          = "ecs-memory-high-${var.name_main}"
+    comparison_operator = "GreaterThanOrEqualToThreshold"
+    evaluation_periods  = 1
+    metric_name         = "MemoryUtilization"
+    namespace           = "AWS/ECS"
+    period              = 60
+    statistic           = "Average"
+    unit                = "Percent"
+    threshold           = var.autoscaling_memory_scale_up_threshold
+
+    dimensions = {
+        ClusterName = aws_ecs_cluster.ecs_cluster.name
+        ServiceName = aws_ecs_service.ecs_service.name
+    }
+
+    alarm_actions = [aws_appautoscaling_policy.scale_up.arn]
+}
+
+resource "aws_cloudwatch_metric_alarm" "memory_low" {
+    alarm_name          = "ecs-memory-low-${var.name_main}"
+    comparison_operator = "LessThanOrEqualToThreshold"
+    evaluation_periods  = 2
+    metric_name         = "MemoryUtilization"
+    namespace           = "AWS/ECS"
+    period              = 240
+    statistic           = "Average"
+    unit                = "Percent"
+    threshold           = var.autoscaling_memory_scale_down_threshold
+
+    dimensions = {
+        ClusterName = aws_ecs_cluster.ecs_cluster.name
+        ServiceName = aws_ecs_service.ecs_service.name
+    }
+}
+
+# Scale_down solo dispara cuando CPU Y memoria estén bajos al mismo tiempo.
+# Evita el cruce: cpu_low + memory_high activos juntos ya no pueden provocar
+# scale_down y scale_up simultáneamente.
+resource "aws_cloudwatch_composite_alarm" "scale_down" {
+    alarm_name = "ecs-scale-down-${var.name_main}"
+    alarm_rule = "ALARM(${aws_cloudwatch_metric_alarm.cpu_low.alarm_name}) AND ALARM(${aws_cloudwatch_metric_alarm.memory_low.alarm_name})"
+
+    alarm_actions = [aws_appautoscaling_policy.scale_down.arn]
+
+    tags = var.tags
 }
