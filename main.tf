@@ -228,6 +228,8 @@ resource "aws_cloudwatch_metric_alarm" "cpu_low" {
         ClusterName = aws_ecs_cluster.ecs_cluster.name
         ServiceName = aws_ecs_service.ecs_service.name
     }
+
+    alarm_actions = [aws_appautoscaling_policy.scale_down.arn]
 }
 
 resource "aws_cloudwatch_metric_alarm" "memory_high" {
@@ -264,16 +266,6 @@ resource "aws_cloudwatch_metric_alarm" "memory_low" {
         ClusterName = aws_ecs_cluster.ecs_cluster.name
         ServiceName = aws_ecs_service.ecs_service.name
     }
-}
-
-# Scale_down solo dispara cuando CPU Y memoria estén bajos al mismo tiempo.
-# Evita el cruce: cpu_low + memory_high activos juntos ya no pueden provocar
-# scale_down y scale_up simultáneamente.
-resource "aws_cloudwatch_composite_alarm" "scale_down" {
-    alarm_name = "ecs-scale-down-${var.name_main}"
-    alarm_rule = "ALARM(${aws_cloudwatch_metric_alarm.cpu_low.alarm_name}) AND ALARM(${aws_cloudwatch_metric_alarm.memory_low.alarm_name})"
 
     alarm_actions = [aws_appautoscaling_policy.scale_down.arn]
-
-    tags = var.tags
 }
