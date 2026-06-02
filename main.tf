@@ -1,6 +1,10 @@
 locals {
-    is_fargate = var.launch_type == "FARGATE"
-    app_port   = var.type_project == "django" ? 8000 : 80
+    is_fargate  = var.launch_type == "FARGATE"
+    app_port    = var.type_project == "django" ? 8000 : 80
+    common_tags = merge(var.tags, {
+        ENV     = "PROD"
+        SERVICE = upper(var.name_main)
+    })
 }
 
 resource "aws_ecr_repository" "ecr_repository" {
@@ -12,7 +16,11 @@ resource "aws_ecr_repository" "ecr_repository" {
         scan_on_push = true
     }
 
-    tags = var.tags
+    tags = local.common_tags
+
+    lifecycle {
+        ignore_changes = [tags["ORDEN"], tags["Name"]]
+    }
 }
 
 resource "aws_ecs_cluster" "ecs_cluster" {
@@ -23,16 +31,21 @@ resource "aws_ecs_cluster" "ecs_cluster" {
         value = var.container_insights
     }
 
-    tags = merge(var.tags, {
-        ENV     = "PROD"
-        SERVICE = upper(var.name_main)
-    })
+    tags = local.common_tags
+
+    lifecycle {
+        ignore_changes = [tags["ORDEN"], tags["Name"]]
+    }
 }
 
 resource "aws_cloudwatch_log_group" "ecs_tasks" {
     name = "/ecs/tasks-logs${var.name_main}"
 
-    tags = var.tags
+    tags = local.common_tags
+
+    lifecycle {
+        ignore_changes = [tags["ORDEN"], tags["Name"]]
+    }
 }
 
 # Task Role — permisos que usa el contenedor en tiempo de ejecución (ECS Exec, SSM, etc.)
@@ -48,7 +61,11 @@ resource "aws_iam_role" "ecs_task_role" {
         }]
     })
 
-    tags = var.tags
+    tags = local.common_tags
+
+    lifecycle {
+        ignore_changes = [tags["ORDEN"], tags["Name"]]
+    }
 }
 
 resource "aws_iam_role_policy" "ecs_exec_policy" {
@@ -95,7 +112,11 @@ resource "aws_ecs_task_definition" "task_definition" {
         TASK_MEMORY           = var.task_memory
     })
 
-    tags = var.tags
+    tags = local.common_tags
+
+    lifecycle {
+        ignore_changes = [tags["ORDEN"], tags["Name"]]
+    }
 }
 
 resource "aws_ecs_service" "ecs_service" {
@@ -136,10 +157,10 @@ resource "aws_ecs_service" "ecs_service" {
     }
 
     lifecycle {
-        ignore_changes = [desired_count]
+        ignore_changes = [desired_count, tags["ORDEN"], tags["Name"]]
     }
 
-    tags = var.tags
+    tags = local.common_tags
 }
 
 # ─── Application Auto Scaling (funciona igual para EC2 y Fargate) ─────────────
@@ -151,7 +172,11 @@ resource "aws_appautoscaling_target" "ecs_target" {
     scalable_dimension = "ecs:service:DesiredCount"
     service_namespace  = "ecs"
 
-    tags = var.tags
+    tags = local.common_tags
+
+    lifecycle {
+        ignore_changes = [tags["ORDEN"], tags["Name"]]
+    }
 }
 
 resource "aws_appautoscaling_policy" "scale_up" {
@@ -242,7 +267,11 @@ resource "aws_cloudwatch_metric_alarm" "scale_up" {
 
     alarm_actions = [aws_appautoscaling_policy.scale_up.arn]
 
-    tags = var.tags
+    tags = local.common_tags
+
+    lifecycle {
+        ignore_changes = [tags["ORDEN"], tags["Name"]]
+    }
 }
 
 # Una sola alarma para scale_down: MAX(cpu, mem) <= umbral
@@ -293,5 +322,9 @@ resource "aws_cloudwatch_metric_alarm" "scale_down" {
 
     alarm_actions = [aws_appautoscaling_policy.scale_down.arn]
 
-    tags = var.tags
+    tags = local.common_tags
+
+    lifecycle {
+        ignore_changes = [tags["ORDEN"], tags["Name"]]
+    }
 }
