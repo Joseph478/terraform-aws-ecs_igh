@@ -124,8 +124,17 @@ resource "aws_ecs_service" "ecs_service" {
     cluster         = aws_ecs_cluster.ecs_cluster.id
     task_definition = aws_ecs_task_definition.task_definition.arn
     desired_count           = var.desired_count
-    launch_type             = var.launch_type
+    launch_type             = local.is_fargate ? "FARGATE" : null
     enable_execute_command  = true
+
+    dynamic "capacity_provider_strategy" {
+        for_each = local.is_fargate ? [] : [1]
+        content {
+            capacity_provider = "capacity-provider-${var.name_main}"
+            weight            = 1
+            base              = 1
+        }
+    }
 
     health_check_grace_period_seconds  = var.health_check_grace_period_seconds
     deployment_minimum_healthy_percent = var.deployment_minimum_healthy_percent
