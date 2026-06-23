@@ -1,0 +1,26 @@
+[
+    {
+        "name": "container_${NAME_MAIN}",
+        "image": "${REPOSITORY_URL}:latest",
+        "cpu": ${TASK_CPU},
+        "memory": ${TASK_MEMORY},
+        "portMappings": [
+            {
+                "containerPort": ${CONTAINER_PORT},
+                "hostPort": ${HOST_PORT},
+                "protocol": "tcp"
+            }
+        ],
+        "essential": true,
+        "secrets": ${SECRETS},
+        "environment": ${ENVIRONMENT_VARS},
+        "logConfiguration": {
+            "logDriver": "awslogs",
+            "options": {
+                "awslogs-region": "us-east-1",
+                "awslogs-group": "${CLOUDWATCH_LOG_GROUP}",
+                "awslogs-stream-prefix": "${AWSLOGS_STREAM_PREFIX}"
+            }
+        }
+    }
+]

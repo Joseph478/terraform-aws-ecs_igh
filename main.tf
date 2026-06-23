@@ -110,6 +110,8 @@ resource "aws_ecs_task_definition" "task_definition" {
         ENVIRONMENT_VARS      = jsonencode(var.environment_vars)
         TASK_CPU              = var.task_cpu
         TASK_MEMORY           = var.task_memory
+        CONTAINER_PORT        = var.container_port
+        HOST_PORT             = var.host_port
     })
 
     tags = local.common_tags

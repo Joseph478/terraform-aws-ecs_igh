@@ -48,8 +48,19 @@ variable "region" {
     type        = string
 }
 variable "container_path" {
+    default     = "./global/container_definition.json"
     description = "Path to the container definition JSON template"
     type        = string
+}
+variable "container_port" {
+    default     = 80
+    description = "Container port"
+    type        = number
+}
+variable "host_port" {
+    default     = 80
+    description = "Host port"
+    type        = number
 }
 variable "launch_type" {
     default     = "EC2"
