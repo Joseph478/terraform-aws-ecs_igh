@@ -101,7 +101,7 @@ resource "aws_ecs_task_definition" "task_definition" {
     task_role_arn      = aws_iam_role.ecs_task_role.arn
     network_mode       = "awsvpc"
 
-    container_definitions = templatefile("${path.module}/${var.container_path}", {
+    container_definitions = templatefile(var.container_path == "global/container_definition.json" ? "${path.module}/${var.container_path}" : var.container_path, {
         NAME_MAIN             = var.name_main
         REPOSITORY_URL        = aws_ecr_repository.ecr_repository.repository_url
         CLOUDWATCH_LOG_GROUP  = aws_cloudwatch_log_group.ecs_tasks.name
