@@ -48,7 +48,7 @@ variable "region" {
     type        = string
 }
 variable "container_path" {
-    default     = "./global/container_definition.json"
+    default     = "global/container_definition.json"
     description = "Path to the container definition JSON template"
     type        = string
 }
