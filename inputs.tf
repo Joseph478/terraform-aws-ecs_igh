@@ -10,6 +10,30 @@ variable "name_ecr" {
     description = "Name of the ECR repository"
     type        = string
 }
+
+variable "ecr_force_delete" {
+    description = "Force delete ECR repository even if it contains images"
+    type        = bool
+    default     = true
+}
+
+variable "ecr_image_tag_mutability" {
+    description = "Image tag mutability setting. 'MUTABLE' allows overwriting tags, 'IMMUTABLE' prevents it (recommended)"
+    type        = string
+    default     = "IMMUTABLE"
+    
+    validation {
+        condition     = contains(["MUTABLE", "IMMUTABLE"], var.ecr_image_tag_mutability)
+        error_message = "ecr_image_tag_mutability must be 'MUTABLE' or 'IMMUTABLE'."
+    }
+}
+
+variable "ecr_max_image_count" {
+    description = "Maximum number of images to keep in ECR repository. Older images will be deleted"
+    type        = number
+    default     = 5
+}
+
 variable "name_service_ecs" {
     description = "Name of the ECS service"
     type        = string
@@ -197,6 +221,30 @@ variable "container_insights" {
         condition     = contains(["disabled", "enabled", "enhanced"], var.container_insights)
         error_message = "container_insights must be 'disabled', 'enabled', or 'enhanced'."
     }
+}
+
+variable "enable_ecs_exec" {
+    default     = true
+    description = "Enable ECS Exec for executing commands in containers. Use with caution"
+    type        = bool
+}
+
+variable "cloudwatch_log_retention_days" {
+    default     = 30
+    description = "CloudWatch log group retention in days"
+    type        = number
+}
+
+variable "s3_bucket_arns" {
+    default     = []
+    description = "List of S3 bucket ARNs that the ECS task can access. Format: arn:aws:s3:::bucket-name/*"
+    type        = list(string)
+}
+
+variable "dynamodb_table_arns" {
+    default     = []
+    description = "List of DynamoDB table ARNs that the ECS task can access"
+    type        = list(string)
 }
 
 variable "type_project" {

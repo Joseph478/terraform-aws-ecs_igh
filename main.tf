@@ -9,8 +9,8 @@ locals {
 
 resource "aws_ecr_repository" "ecr_repository" {
     name                 = var.name_ecr
-    image_tag_mutability = "MUTABLE"
-    force_delete         = true
+    image_tag_mutability = var.ecr_image_tag_mutability
+    force_delete         = var.ecr_force_delete
 
     image_scanning_configuration {
         scan_on_push = true
@@ -21,6 +21,26 @@ resource "aws_ecr_repository" "ecr_repository" {
     lifecycle {
         ignore_changes = [tags["ORDEN"], tags["Name"]]
     }
+}
+
+resource "aws_ecr_lifecycle_policy" "ecr_lifecycle" {
+    repository = aws_ecr_repository.ecr_repository.name
+    policy = jsonencode({
+        rules = [
+            {
+                rulePriority = 1
+                description  = "Keep only the last N images, delete others"
+                selection = {
+                    tagStatus           = "any"
+                    countType           = "imageCountMoreThan"
+                    countNumber         = var.ecr_max_image_count
+                }
+                action = {
+                    type = "expire"
+                }
+            }
+        ]
+    })
 }
 
 resource "aws_ecs_cluster" "ecs_cluster" {
@@ -39,7 +59,8 @@ resource "aws_ecs_cluster" "ecs_cluster" {
 }
 
 resource "aws_cloudwatch_log_group" "ecs_tasks" {
-    name = "/ecs/tasks-logs${var.name_main}"
+    name              = "/ecs/tasks-logs${var.name_main}"
+    retention_in_days = var.cloudwatch_log_retention_days
 
     tags = local.common_tags
 
@@ -48,9 +69,57 @@ resource "aws_cloudwatch_log_group" "ecs_tasks" {
     }
 }
 
+# Permission Boundary — limita permisos máximos que puede tener cualquier política en el rol
+resource "aws_iam_policy" "ecs_task_permission_boundary" {
+    name        = "ecs-task-permission-boundary-${var.name_main}"
+    description = "Permission boundary for ECS task role - limits maximum permissions"
+    
+    policy = jsonencode({
+        Version = "2012-10-17"
+        Statement = [
+            {
+                Sid    = "AllowECSExecSSM"
+                Effect = "Allow"
+                Action = [
+                    "ssmmessages:CreateControlChannel",
+                    "ssmmessages:CreateDataChannel",
+                    "ssmmessages:OpenControlChannel",
+                    "ssmmessages:OpenDataChannel"
+                ]
+                Resource = "arn:aws:ssm:*:*:*"
+            },
+            {
+                Sid    = "AllowS3Access"
+                Effect = "Allow"
+                Action = [
+                    "s3:PutObject",
+                    "s3:GetObject",
+                    "s3:AbortMultipartUpload",
+                    "s3:HeadObject",
+                    "s3:ListBucket"
+                ]
+                Resource = length(var.s3_bucket_arns) > 0 ? var.s3_bucket_arns : ["arn:aws:s3:::bucket-placeholder"]
+            },
+            {
+                Sid    = "AllowDynamoDBAccess"
+                Effect = "Allow"
+                Action = [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan"
+                ]
+                Resource = length(var.dynamodb_table_arns) > 0 ? var.dynamodb_table_arns : ["arn:aws:dynamodb:*:*:table/placeholder"]
+            }
+        ]
+    })
+}
+
 # Task Role — permisos que usa el contenedor en tiempo de ejecución (ECS Exec, SSM, etc.)
 resource "aws_iam_role" "ecs_task_role" {
-    name = "ecsTaskRole-${var.name_main}"
+    name                 = "ecsTaskRole-${var.name_main}"
+    permissions_boundary = aws_iam_policy.ecs_task_permission_boundary.arn
 
     assume_role_policy = jsonencode({
         Version = "2012-10-17"
@@ -68,13 +137,14 @@ resource "aws_iam_role" "ecs_task_role" {
     }
 }
 
-resource "aws_iam_role_policy" "ecs_exec_policy" {
-    name = "ecs-exec-ssm-${var.name_main}"
+resource "aws_iam_role_policy" "ecs_ssm_policy" {
+    name = "ecs-ssm-${var.name_main}"
     role = aws_iam_role.ecs_task_role.id
 
     policy = jsonencode({
         Version = "2012-10-17"
         Statement = [{
+            Sid    = "AllowSSMExec"
             Effect = "Allow"
             Action = [
                 "ssmmessages:CreateControlChannel",
@@ -82,7 +152,58 @@ resource "aws_iam_role_policy" "ecs_exec_policy" {
                 "ssmmessages:OpenControlChannel",
                 "ssmmessages:OpenDataChannel"
             ]
-            Resource = "*"
+            Resource = "arn:aws:ssm:*:*:*"
+        }]
+    })
+}
+
+resource "aws_iam_role_policy" "ecs_s3_policy" {
+    count = length(var.s3_bucket_arns) > 0 ? 1 : 0
+    name  = "ecs-s3-${var.name_main}"
+    role  = aws_iam_role.ecs_task_role.id
+
+    policy = jsonencode({
+        Version = "2012-10-17"
+        Statement = [
+            {
+                Sid    = "AllowS3ObjectAccess"
+                Effect = "Allow"
+                Action = [
+                    "s3:PutObject",
+                    "s3:GetObject",
+                    "s3:AbortMultipartUpload",
+                    "s3:HeadObject"
+                ]
+                Resource = var.s3_bucket_arns
+            },
+            {
+                Sid    = "AllowS3ListBucket"
+                Effect = "Allow"
+                Action = "s3:ListBucket"
+                Resource = [for arn in var.s3_bucket_arns : replace(arn, "/*", "")]
+            }
+        ]
+    })
+}
+
+resource "aws_iam_role_policy" "ecs_dynamodb_policy" {
+    count = length(var.dynamodb_table_arns) > 0 ? 1 : 0
+    name  = "ecs-dynamodb-${var.name_main}"
+    role  = aws_iam_role.ecs_task_role.id
+
+    policy = jsonencode({
+        Version = "2012-10-17"
+        Statement = [{
+            Sid    = "AllowDynamoDBAccess"
+            Effect = "Allow"
+            Action = [
+                "dynamodb:GetItem",
+                "dynamodb:PutItem",
+                "dynamodb:UpdateItem",
+                "dynamodb:Query",
+                "dynamodb:Scan"
+            ]
+            Resource = var.dynamodb_table_arns
         }]
     })
 }
@@ -129,7 +250,7 @@ resource "aws_ecs_service" "ecs_service" {
     task_definition = aws_ecs_task_definition.task_definition.arn
     desired_count           = var.desired_count
     launch_type             = local.is_fargate ? "FARGATE" : null
-    enable_execute_command  = true
+    enable_execute_command  = var.enable_ecs_exec
 
     dynamic "capacity_provider_strategy" {
         for_each = local.is_fargate ? [] : [1]
