@@ -112,6 +112,8 @@ resource "aws_ecs_task_definition" "task_definition" {
         TASK_MEMORY           = var.task_memory
         CONTAINER_PORT        = var.container_port
         HOST_PORT             = var.host_port
+        CONTAINER_PORT_ADDITIONAL = var.container_port_additional
+        HOST_PORT_ADDITIONAL = var.host_port_additional
     })
 
     tags = local.common_tags

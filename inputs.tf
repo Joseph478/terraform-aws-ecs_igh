@@ -62,6 +62,16 @@ variable "host_port" {
     description = "Host port"
     type        = number
 }
+variable "container_port_additional" {
+    default     = 8080
+    description = "Additional container port"
+    type        = number
+}
+variable "host_port_additional" {
+    default     = 8080
+    description = "Additional host port"
+    type        = number
+}
 variable "launch_type" {
     default     = "EC2"
     description = "ECS launch type. Allowed values: 'EC2', 'FARGATE'"

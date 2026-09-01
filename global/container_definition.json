@@ -9,6 +9,11 @@
                 "containerPort": ${CONTAINER_PORT},
                 "hostPort": ${HOST_PORT},
                 "protocol": "tcp"
+            },
+            {
+                "containerPort": ${CONTAINER_PORT_ADDITIONAL},
+                "hostPort": ${HOST_PORT_ADDITIONAL},
+                "protocol": "tcp"
             }
         ],
         "essential": true,
