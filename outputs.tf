@@ -14,10 +14,6 @@ output "id_ecs_service" {
     value = aws_ecs_service.ecs_service.id
 }
 
-output "arn_ecs_service" {
-    value = aws_ecs_service.ecs_service.arn
-}
-
 output "name_ecs_service" {
     value = aws_ecs_service.ecs_service.name
 }
