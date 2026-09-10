@@ -20,7 +20,7 @@ variable "ecr_force_delete" {
 variable "ecr_image_tag_mutability" {
     description = "Image tag mutability setting. 'MUTABLE' allows overwriting tags, 'IMMUTABLE' prevents it (recommended)"
     type        = string
-    default     = "IMMUTABLE"
+    default     = "MUTABLE"
     
     validation {
         condition     = contains(["MUTABLE", "IMMUTABLE"], var.ecr_image_tag_mutability)
