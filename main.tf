@@ -99,7 +99,7 @@ resource "aws_iam_policy" "ecs_task_permission_boundary" {
                     "s3:HeadObject",
                     "s3:ListBucket"
                 ]
-                Resource = length(var.s3_bucket_arns) > 0 ? var.s3_bucket_arns : ["arn:aws:s3:::bucket-placeholder"]
+                Resource = length(var.s3_bucket_arns) > 0 ? var.s3_bucket_arns : ["arn:aws:s3:::*"]
             },
             {
                 Sid    = "AllowDynamoDBAccess"
@@ -111,7 +111,7 @@ resource "aws_iam_policy" "ecs_task_permission_boundary" {
                     "dynamodb:Query",
                     "dynamodb:Scan"
                 ]
-                Resource = length(var.dynamodb_table_arns) > 0 ? var.dynamodb_table_arns : ["arn:aws:dynamodb:*:*:table/placeholder"]
+                Resource = length(var.dynamodb_table_arns) > 0 ? var.dynamodb_table_arns : ["*"]
             }
         ]
     })
