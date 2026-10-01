@@ -115,6 +115,12 @@ resource "aws_iam_policy" "ecs_task_permission_boundary" {
             }
         ]
     })
+
+    tags = local.common_tags
+
+    lifecycle {
+        ignore_changes = [tags["ORDEN"], tags["Name"]]
+    }
 }
 
 # Task Role — permisos que usa el contenedor en tiempo de ejecución (ECS Exec, SSM, etc.)
@@ -252,6 +258,10 @@ resource "aws_ecs_service" "ecs_service" {
     desired_count           = var.desired_count
     launch_type             = local.is_fargate ? "FARGATE" : null
     enable_execute_command  = var.enable_ecs_exec
+
+    # Las tareas (y sus ENI/volúmenes EBS administrados por ECS) heredan los tags del servicio
+    enable_ecs_managed_tags = true
+    propagate_tags          = "SERVICE"
 
     dynamic "capacity_provider_strategy" {
         for_each = local.is_fargate ? [] : [1]
